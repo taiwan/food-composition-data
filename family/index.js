@@ -10,12 +10,13 @@ const ProgressBar = require('progress');
   }
   console.log();
   const stream = fs.createWriteStream(process.argv[2]);
+  const logStream = fs.createWriteStream('debug.log');
   console.log('  爬列表');
   const foods = await fetchFoodList();
   console.log('  爬食物成份');
   const bar = new ProgressBar('  [:bar] :rate/bps :percent :etas', { total: foods.length });
   bar.tick(0);
-  await batch(40, foods, food => retry(() => fetchFoodData(bar, stream, food), 10));
+  await batch(5, foods, food => retry(() => fetchFoodData(bar, stream, logStream, food), 10));
   stream.end();
 })().then(() => {
   console.log('  成功!');
@@ -78,26 +79,37 @@ async function retry(fn, times) {
   }
 }
 
-async function fetchFoodData(bar, stream, food) {
-  const res = await request.get(food.href);
-  const $ = cheerio.load(res.data);
-  const info = $('.news-right h5')
-    .map((_, el) => {
-      const text = $(el).text();
-      const parts = text.split('：').map(text => text.trim());
-      if (!infoMap[parts[0]]) {
-        return;
-      }
-      return {
-        key: infoMap[parts[0]],
-        value: parts[1],
-      };
-    })
-    .get()
-    .filter(Boolean)
-    .reduce((info, field) => Object.assign(info, {
-      [field.key]: field.value,
-    }), food);
-  stream.write(JSON.stringify(info) + '\n');
+async function fetchFoodData(bar, stream, logStream, food) {
+  try {
+    logStream.write(`[${food.name}] 發送 http request ${food.href}\n`);
+    const res = await request.get(food.href);
+    logStream.write(`[${food.name}] 成功取得網頁資料\n`);
+    logStream.write(`[${food.name}] Parse HTML\n`);
+    const $ = cheerio.load(res.data);
+    const info = $('.news-right h5')
+      .map((_, el) => {
+        const text = $(el).text();
+        const parts = text.split('：').map(text => text.trim());
+        if (!infoMap[parts[0]]) {
+          return;
+        }
+        return {
+          key: infoMap[parts[0]],
+          value: parts[1],
+        };
+      })
+      .get()
+      .filter(Boolean)
+      .reduce((info, field) => Object.assign(info, {
+        [field.key]: field.value,
+      }), food);
+    logStream.write(`[${food.name}] Parse 成功\n`);
+    stream.write(JSON.stringify(info) + '\n');
+    logStream.write(`[${food.name}] 寫入檔案\n`);
+  } catch(err) {
+    logStream.write(`[${food.name}] 失敗 ${err.message}\n`);
+    throw err;
+  }
+  logStream.write(`[${food.name}] 成功\n`);
   bar.tick(1);
 }
