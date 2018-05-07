@@ -53,7 +53,7 @@ const infoMap = {
   '過敏原': 'allergy',
   '規格(每份)': 'amount',
   '本包裝含幾份': 'portion',
-  '熱量': 'calorie',
+  '熱量': 'energy',
   '蛋白質': 'protein',
   '脂肪': 'fat',
   '飽和脂肪': 'saturated_fat',
